@@ -2,10 +2,13 @@ import streamlit as st
 import time
 import random
 from streamlit.components.v1 import html
+from collections import deque
 
 # Initialize session state for practice status if it doesn't exist
 if 'is_practicing' not in st.session_state:
     st.session_state.is_practicing = False
+if 'chord_sequence' not in st.session_state:
+    st.session_state.chord_sequence = deque(maxlen=4)  # Current + 3 upcoming
 
 # Define the possible notes and chord types
 NOTES = ['A', 'Bb', 'B', 'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab']
@@ -27,24 +30,37 @@ TIME_SIGNATURES = [2, 3, 4, 5, 6]
 # Set page title and description
 st.title('Chord Practice Tool')
 
-# Add MIDI test button
-if st.button('Play Random Chord Sequence'):
-    # Generate a sequence of base notes
+def generate_chord_sequence(num_chords):
+    """Generate a sequence of chords and their corresponding MIDI notes"""
     sequence = []
+    display_sequence = []
     seconds_per_beat = 60.0 / st.session_state.bpm
-    beats_per_measure = st.session_state.time_signature  # Get time signature from session state
+    beats_per_measure = st.session_state.time_signature
     seconds_per_measure = seconds_per_beat * beats_per_measure
     
-    # Play the specified number of notes, one per measure
-    for i in range(st.session_state.num_chords):
-        note = random.choice(['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'])
+    # Generate the sequence
+    for i in range(num_chords):
+        # Generate random note and chord type
+        note = random.choice(st.session_state.selected_notes)
+        chord_type = random.choice(st.session_state.selected_chord_types)
+        
+        # Create display version (e.g., "C-7")
+        display_chord = f"{note}{CHORD_TYPES[chord_type]}"
+        display_sequence.append(display_chord)
+        
+        # Create MIDI version (e.g., "C4")
+        # Convert note to MIDI format (adding "4" for middle octave)
+        midi_note = f"{note}4"
         sequence.append({
-            'note': note,
-            'time': i * seconds_per_measure,  # Start each note at the beginning of its measure
-            'duration': seconds_per_measure * 0.95  # Slightly shorter than measure to create separation
+            'note': midi_note,
+            'time': i * seconds_per_measure,
+            'duration': seconds_per_measure * 0.95
         })
     
-    # Create the JavaScript with both the audio setup and sequence playback
+    return sequence, display_sequence
+
+def play_sequence(sequence):
+    """Play the MIDI sequence"""
     js_code = f"""
         <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
         <script>
@@ -68,45 +84,41 @@ if st.button('Play Random Chord Sequence'):
         }})();
         </script>
     """
-    
-    # Render the JavaScript
     html(js_code, height=0)
 
-# Add audio initialization buttons
-html("""
-    <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
-    <script>
-    async function initializeAudio() {
-        if (!window.audioContext) {
-            window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (!window.player) {
-            window.player = await Soundfont.instrument(window.audioContext, 'acoustic_grand_piano');
-        }
-        return window.player;
-    }
-
-    function playTestSound() {
-        (async function() {
-            try {
-                const player = await initializeAudio();
-                console.log('Playing test sound');
-                player.play('C4', 0, {duration: 1});
-            } catch (error) {
-                console.error('Error playing test sound:', error);
-            }
-        })();
-    }
-    </script>
+def display_chord_sequence(display_sequence):
+    """Display the chord sequence with a rolling window"""
+    # Initialize the display window with first 4 chords (or pad with spaces if fewer)
+    window = deque(display_sequence[:4] + [''] * (4 - len(display_sequence)), maxlen=4)
+    st.session_state.chord_sequence = window
     
-    <button onclick="playTestSound()">Test Sound</button>
-""", height=100)
-
-# Create the start/stop button at the top
-if st.button('Start Practice' if not st.session_state.is_practicing else 'Stop Practice'):
-    st.session_state.is_practicing = not st.session_state.is_practicing
-
-st.write('Select the chords and tempo for your practice session')
+    # Create placeholder for chord display
+    chord_display = st.empty()
+    
+    # Display and update chords
+    for i in range(len(display_sequence)):
+        # Update display
+        display_html = f"""
+        <div style='display: flex; align-items: center; justify-content: center; gap: 20px; margin: 20px;'>
+            <span style='font-size: 72px;'>{window[0]}</span>
+            <span style='font-size: 36px; color: #666;'>|</span>
+            <span style='font-size: 36px;'>{window[1]}</span>
+            <span style='font-size: 36px; color: #666;'>|</span>
+            <span style='font-size: 36px;'>{window[2]}</span>
+            <span style='font-size: 36px; color: #666;'>|</span>
+            <span style='font-size: 36px;'>{window[3]}</span>
+        </div>
+        """
+        chord_display.markdown(display_html, unsafe_allow_html=True)
+        
+        # Wait for next measure
+        time.sleep(st.session_state.time_signature * 60.0 / st.session_state.bpm)
+        
+        # Rotate window and add next chord if available
+        if i + 4 < len(display_sequence):
+            window.append(display_sequence[i + 4])
+        else:
+            window.append('')
 
 # Sidebar controls
 with st.sidebar:
@@ -118,6 +130,7 @@ with st.sidebar:
     for note in NOTES:
         if st.checkbox(note, value=True):
             selected_notes.append(note)
+    st.session_state.selected_notes = selected_notes
     
     # Chord type selection
     st.subheader('Select Chord Types')
@@ -137,77 +150,40 @@ with st.sidebar:
     for chord_type, description in chord_descriptions.items():
         if st.checkbox(description, value=False):
             selected_chord_types.append(chord_type)
+    st.session_state.selected_chord_types = selected_chord_types
     
     # Time signature and tempo controls
     st.subheader('Rhythm Settings')
     time_signature = st.selectbox('Beats per measure', TIME_SIGNATURES, index=2, key="time_signature")  # Default to 4/4
     bpm = st.slider('Tempo (BPM)', min_value=30, max_value=200, value=120, key="bpm")
     num_chords = st.slider('Number of Chords', min_value=1, max_value=16, value=4, key="num_chords")
+    
+    # Add test sound button at bottom of sidebar
+    st.markdown("---")
+    html("""
+        <script>
+        async function testSound() {
+            try {
+                if (!window.player) {
+                    window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    window.player = await Soundfont.instrument(window.audioContext, 'acoustic_grand_piano');
+                }
+                window.player.play('C4', 0, {duration: 1});
+            } catch (error) {
+                console.error('Error playing test sound:', error);
+            }
+        }
+        </script>
+        <button onclick="testSound()" style="font-size: 0.8em;">Test Sound</button>
+    """, height=50)
 
-def create_beat_display(num_beats, current_beat):
-    # Create a simpler visual representation using Unicode characters
-    beats = []
-    for i in range(num_beats):
-        if i < current_beat:
-            beats.append("●")  # Filled circle
-        else:
-            beats.append("○")  # Empty circle
-    return " ".join(beats)
-
-# Main practice area
-if st.session_state.is_practicing and selected_notes and selected_chord_types:
-    # Create placeholders for display elements
-    current_chord_placeholder = st.empty()
-    beat_display_placeholder = st.empty()
-    
-    def generate_chord():
-        note = random.choice(selected_notes)
-        chord_type = random.choice(selected_chord_types)
-        return f"{note}{CHORD_TYPES[chord_type]}"
-    
-    # Calculate time per beat in seconds
-    seconds_per_beat = 60.0 / bpm
-    
-    # Main practice loop
-    try:
-        # Generate initial set of chords
-        current_chord = generate_chord()
-        next_chords = [generate_chord() for _ in range(3)]  # Generate 3 upcoming chords
-        beat_count = 0
+# Create the start/stop button at the top
+if st.button('Start Practice' if not st.session_state.is_practicing else 'Stop Practice'):
+    st.session_state.is_practicing = not st.session_state.is_practicing
+    if st.session_state.is_practicing:
+        # Generate the complete sequence first
+        midi_sequence, display_sequence = generate_chord_sequence(st.session_state.num_chords)
         
-        while st.session_state.is_practicing:
-            # Update current beat display
-            beat_display = create_beat_display(time_signature, (beat_count % time_signature) + 1)
-            beat_display_placeholder.markdown(
-                f"<h2 style='text-align: center; font-size: 36px;'>{beat_display}</h2>",
-                unsafe_allow_html=True
-            )
-            
-            # Display current chord and upcoming chords in a horizontal layout
-            current_chord_placeholder.markdown(
-                f"""
-                <div style='display: flex; align-items: center; justify-content: center; gap: 10px;'>
-                    <span style='font-size: 72px;'>{current_chord}</span>
-                    <span style='font-size: 24px; color: #666;'>|</span>
-                    <span style='font-size: 24px;'>{next_chords[0]}</span>
-                    <span style='font-size: 24px; color: #666;'>|</span>
-                    <span style='font-size: 24px;'>{next_chords[1]}</span>
-                    <span style='font-size: 24px; color: #666;'>|</span>
-                    <span style='font-size: 24px;'>{next_chords[2]}</span>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-            
-            time.sleep(seconds_per_beat)
-            beat_count += 1
-            
-            # Change chord when we reach the end of a measure
-            if beat_count % time_signature == 0:
-                current_chord = next_chords[0]
-                next_chords = next_chords[1:] + [generate_chord()]
-            
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
-elif st.session_state.is_practicing:
-    st.warning('Please select at least one note and one chord type to begin practice.')
+        # Start both the sequence playback and chord display
+        play_sequence(midi_sequence)  # Non-blocking
+        display_chord_sequence(display_sequence)  # Blocking
