@@ -124,23 +124,31 @@ def generate_chord_sequence(num_chords):
     
     if st.session_state.progression_type == "II-V-I":
         # Generate multiple II-V-I progressions
-        num_progressions = num_chords
+        chords_per_progression = 3  # II-V-I has 3 chords
+        num_progressions = (num_chords + chords_per_progression - 1) // chords_per_progression
         for _ in range(num_progressions):
             root_note = random.choice(st.session_state.selected_notes)
             progression = generate_two_five_one(root_note)
             display_sequence.extend(progression)
+            if len(display_sequence) >= num_chords:
+                display_sequence = display_sequence[:num_chords]
+                break
     elif st.session_state.progression_type == "Diatonic Cycle":
         # Generate multiple diatonic cycle progressions
-        num_progressions = num_chords
+        chords_per_progression = 7  # Diatonic cycle has 7 chords
+        num_progressions = (num_chords + chords_per_progression - 1) // chords_per_progression
         for _ in range(num_progressions):
             root_note = random.choice(st.session_state.selected_notes)
             progression = generate_diatonic_cycle(root_note)
             display_sequence.extend(progression)
+            if len(display_sequence) >= num_chords:
+                display_sequence = display_sequence[:num_chords]
+                break
     else:
         # Generate random chords
         for _ in range(num_chords):
             note = random.choice(st.session_state.selected_notes)
-            chord_type = random.choice(st.session_state.selected_chord_types)
+            chord_type = random.choice(list(st.session_state.selected_chord_types))
             display_chord = f"{note}{CHORD_TYPES[chord_type]}"
             display_sequence.append(display_chord)
     
@@ -157,7 +165,7 @@ def generate_chord_sequence(num_chords):
             'note': midi_note,
             'time': i * seconds_per_measure,
             'duration': seconds_per_measure * 0.95,
-            'instrument': 'double_bass'  # Use double bass instrument sound
+            'instrument': 'bass'  # Use bass instrument sound
         })
     
     return sequence, display_sequence
@@ -342,8 +350,8 @@ with st.sidebar:
     
     st.subheader('Rhythm Settings')
     st.session_state.time_signature = st.selectbox('Beats per measure', TIME_SIGNATURES, index=2)
-    st.session_state.bpm = st.slider('Tempo (BPM)', min_value=30, max_value=200, value=120)
-    st.session_state.num_chords = st.slider('Number of Chords', min_value=1, max_value=16, value=4)
+    st.session_state.bpm = st.slider('Tempo (BPM)', min_value=40, max_value=200, value=120, step=1)
+    st.session_state.num_chords = st.slider('Number of Chords', min_value=4, max_value=50, value=16, step=1)
     
     st.markdown("---")
     js_code = read_file(os.path.join('static', 'player.js'))
