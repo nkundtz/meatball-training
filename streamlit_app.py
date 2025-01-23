@@ -27,6 +27,81 @@ TIME_SIGNATURES = [2, 3, 4, 5, 6]
 # Set page title and description
 st.title('Chord Practice Tool')
 
+# Add MIDI test button
+if st.button('Play Random Chord Sequence'):
+    # Generate a sequence of base notes
+    sequence = []
+    seconds_per_beat = 60.0 / st.session_state.bpm
+    beats_per_measure = st.session_state.time_signature  # Get time signature from session state
+    seconds_per_measure = seconds_per_beat * beats_per_measure
+    
+    # Play the specified number of notes, one per measure
+    for i in range(st.session_state.num_chords):
+        note = random.choice(['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'])
+        sequence.append({
+            'note': note,
+            'time': i * seconds_per_measure,  # Start each note at the beginning of its measure
+            'duration': seconds_per_measure * 0.95  # Slightly shorter than measure to create separation
+        })
+    
+    # Create the JavaScript with both the audio setup and sequence playback
+    js_code = f"""
+        <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
+        <script>
+        (async function() {{
+            try {{
+                // Initialize audio if needed
+                if (!window.player) {{
+                    window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    window.player = await Soundfont.instrument(window.audioContext, 'acoustic_grand_piano');
+                }}
+                
+                // Play the sequence
+                const sequence = {sequence};
+                const now = window.audioContext.currentTime;
+                sequence.forEach(note => {{
+                    window.player.play(note.note, now + note.time, {{duration: note.duration}});
+                }});
+            }} catch (error) {{
+                console.error('Error:', error);
+            }}
+        }})();
+        </script>
+    """
+    
+    # Render the JavaScript
+    html(js_code, height=0)
+
+# Add audio initialization buttons
+html("""
+    <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
+    <script>
+    async function initializeAudio() {
+        if (!window.audioContext) {
+            window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (!window.player) {
+            window.player = await Soundfont.instrument(window.audioContext, 'acoustic_grand_piano');
+        }
+        return window.player;
+    }
+
+    function playTestSound() {
+        (async function() {
+            try {
+                const player = await initializeAudio();
+                console.log('Playing test sound');
+                player.play('C4', 0, {duration: 1});
+            } catch (error) {
+                console.error('Error playing test sound:', error);
+            }
+        })();
+    }
+    </script>
+    
+    <button onclick="playTestSound()">Test Sound</button>
+""", height=100)
+
 # Create the start/stop button at the top
 if st.button('Start Practice' if not st.session_state.is_practicing else 'Stop Practice'):
     st.session_state.is_practicing = not st.session_state.is_practicing
@@ -46,7 +121,6 @@ with st.sidebar:
     
     # Chord type selection
     st.subheader('Select Chord Types')
-    # Add descriptions to make it clear what each symbol means
     chord_descriptions = {
         'Major': 'Major',
         'Minor': 'Minor',
@@ -66,8 +140,9 @@ with st.sidebar:
     
     # Time signature and tempo controls
     st.subheader('Rhythm Settings')
-    time_signature = st.selectbox('Beats per measure', TIME_SIGNATURES, index=2)  # Default to 4/4
-    bpm = st.slider('Tempo (BPM)', min_value=30, max_value=200, value=120)
+    time_signature = st.selectbox('Beats per measure', TIME_SIGNATURES, index=2, key="time_signature")  # Default to 4/4
+    bpm = st.slider('Tempo (BPM)', min_value=30, max_value=200, value=120, key="bpm")
+    num_chords = st.slider('Number of Chords', min_value=1, max_value=16, value=4, key="num_chords")
 
 def create_beat_display(num_beats, current_beat):
     # Create a simpler visual representation using Unicode characters
