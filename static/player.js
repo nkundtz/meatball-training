@@ -1,65 +1,76 @@
 // Global variables for audio
 let audioContext = null;
-let player = null;
+let snarePlayer = null;
+let bassPlayer = null;
+let masterGain = null;
 
-// Initialize audio context and player
+// Listen for mute updates
+window.addEventListener('message', function(event) {
+    if (event.data.type === 'volume_update' && masterGain) {
+        masterGain.gain.setValueAtTime(event.data.volume, audioContext.currentTime);
+    }
+});
+
+// Initialize audio context and players
 async function initAudio() {
     if (!audioContext) {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        masterGain = audioContext.createGain();
+        masterGain.connect(audioContext.destination);
     }
-    if (!player) {
+    if (!snarePlayer) {
         try {
-            player = await Soundfont.instrument(audioContext, 'acoustic_grand_piano');
+            snarePlayer = await Soundfont.instrument(audioContext, 'synth_drum', {
+                destination: masterGain
+            });
         } catch (error) {
-            throw new Error('Failed to load piano sound: ' + error.message);
+            throw new Error('Failed to load snare sound: ' + error.message);
         }
     }
-    return { audioContext, player };
-}
-
-// Test sound function
-async function testSound() {
-    try {
-        const testButton = document.getElementById('test-sound-button');
-        const originalText = testButton.textContent;
-        testButton.disabled = true;
-        testButton.textContent = 'Loading...';
-
-        const { audioContext, player } = await initAudio();
-        
-        // Resume audio context (needed for Chrome)
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
+    if (!bassPlayer) {
+        try {
+            bassPlayer = await Soundfont.instrument(audioContext, 'acoustic_bass', {
+                destination: masterGain
+            });
+        } catch (error) {
+            throw new Error('Failed to load bass sound: ' + error.message);
         }
-        
-        // Play a middle C note
-        await player.play('C4', audioContext.currentTime, { duration: 1 });
-        
-        testButton.textContent = '✓ Sound works!';
-        setTimeout(() => {
-            testButton.disabled = false;
-            testButton.textContent = originalText;
-        }, 2000);
-        
-    } catch (error) {
-        const testButton = document.getElementById('test-sound-button');
-        testButton.textContent = '❌ ' + error.message;
-        testButton.style.color = '#ff6b6b';
-        console.error('Test sound error:', error);
-        
-        // Reset button after 3 seconds
-        setTimeout(() => {
-            testButton.disabled = false;
-            testButton.textContent = 'Test Sound';
-            testButton.style.color = '';
-        }, 3000);
     }
+    return { audioContext, snarePlayer, bassPlayer };
 }
 
-async function initPlayer(chordSequence, metronomeSequence, displaySequence, timeSignature, bpm) {
+// Schedule a note to play
+function scheduleNote(noteName, time, duration, baseGain = 1, instrument = 'snare') {
+    const note = {
+        noteName,
+        time,
+        duration,
+        baseGain,
+        timeout: setTimeout(() => {
+            const player = instrument === 'snare' ? snarePlayer : bassPlayer;
+            if (player) {
+                player.play(noteName, time, {
+                    duration: duration,
+                    gain: baseGain
+                });
+            }
+        }, (time - audioContext.currentTime) * 1000)
+    };
+    return note;
+}
+
+async function initPlayer(chordSequence, metronomeSequence, displaySequence, timeSignature, bpm, currentVolume) {
     try {
         // Initialize audio and wait for it to be ready
-        const { audioContext, player } = await initAudio();
+        const { audioContext, snarePlayer, bassPlayer } = await initAudio();
+        
+        // Set initial volume
+        if (masterGain) {
+            masterGain.gain.setValueAtTime(currentVolume, audioContext.currentTime);
+        }
+        
+        // Clear previously scheduled notes
+        const scheduledNotes = [];
         
         // Initialize display functions
         function updateBeatDisplay(currentBeat) {
@@ -97,34 +108,57 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
         // Countdown
         for (let i = 4; i > 0; i--) {
             countdown.textContent = i;
+            scheduleNote('C3', audioContext.currentTime, 0.1, 0.3, 'snare');
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         countdown.style.display = 'none';
         
-        const secondsPerBeat = 60.0 / bpm;
-        const startTime = audioContext.currentTime + 0.1;
-        
-        // Schedule all audio
-        chordSequence.forEach(note => {
-            player.play(note.note, startTime + note.time, {duration: note.duration});
-        });
-        
-        metronomeSequence.forEach(note => {
-            player.play(note.note, startTime + note.time, {duration: note.duration, gain: note.gain});
-        });
-        
-        // Animation frame handler
-        let currentMeasure = 0;
-        let currentBeat = -1;
+        // Calculate total measures needed
         const totalMeasures = displaySequence.length;
+        const secondsPerBeat = 60.0 / bpm;
+        const secondsPerMeasure = secondsPerBeat * timeSignature;
+        const totalDuration = totalMeasures * secondsPerMeasure;
         
-        function animate(timestamp) {
+        // Schedule all notes
+        const startTime = audioContext.currentTime + 0.1;
+        let currentTime = startTime;
+        let currentBeat = -1;
+        let currentMeasure = 0;
+        
+        // Schedule chord sequence
+        for (const chord of chordSequence) {
+            scheduledNotes.push(
+                scheduleNote(
+                    chord.note,
+                    currentTime + chord.time,
+                    chord.duration,
+                    0.8,
+                    'bass'  // Always use bass for chord sequence
+                )
+            );
+        }
+        
+        // Schedule metronome sequence
+        // Generate enough metronome clicks for all measures
+        for (let time = 0; time < totalDuration; time += secondsPerBeat) {
+            const isDownbeat = (Math.floor(time / secondsPerMeasure) * secondsPerMeasure) === time;
+            scheduledNotes.push(
+                scheduleNote(
+                    'C3',  // Use C3 for all metronome clicks
+                    currentTime + time,
+                    0.1,  // Short duration for snare hits
+                    isDownbeat ? 0.4 : 0.2,  // Louder on downbeat
+                    'snare'  // Always use snare for metronome
+                )
+            );
+        }
+        
+        // Update display
+        function updateDisplay() {
             const elapsedTime = audioContext.currentTime - startTime;
-            const totalBeats = Math.floor(elapsedTime / secondsPerBeat);
-            const newMeasure = Math.floor(totalBeats / timeSignature);
-            const newBeat = totalBeats % timeSignature;
+            const newBeat = Math.floor(elapsedTime / secondsPerBeat) % timeSignature;
+            const newMeasure = Math.floor(elapsedTime / secondsPerMeasure);
             
-            // Update if beat or measure changed
             if (newBeat !== currentBeat) {
                 currentBeat = newBeat;
                 updateBeatDisplay(currentBeat);
@@ -132,39 +166,30 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
             
             if (newMeasure !== currentMeasure) {
                 currentMeasure = newMeasure;
-                if (currentMeasure < totalMeasures) {
-                    updateChordDisplay(currentMeasure);
-                }
+                updateChordDisplay(currentMeasure);
             }
             
-            // Continue animation if not finished
-            if (currentMeasure < totalMeasures) {
-                requestAnimationFrame(animate);
-            } else {
-                // Reset button state when sequence finishes
-                window.parent.postMessage({
-                    type: 'streamlit:setComponentValue',
-                    data: false
-                }, '*');
-                window.parent.postMessage({
-                    type: 'streamlit:rerun'
-                }, '*');
-                
-                // Reset displays
-                updateBeatDisplay(-1);
-                updateChordDisplay(0);
+            // Continue animation until all measures are complete
+            if (elapsedTime < totalDuration) {
+                requestAnimationFrame(updateDisplay);
             }
         }
         
-        // Start animation
-        requestAnimationFrame(animate);
+        requestAnimationFrame(updateDisplay);
         
     } catch (error) {
-        console.error('Error:', error);
-        const loadingText = document.querySelector('.loading-text');
-        if (loadingText) {
-            loadingText.textContent = 'Error loading sounds: ' + error.message;
-            loadingText.style.color = '#ff6b6b';
+        console.error('Error initializing player:', error);
+        throw error;
+    }
+}
+
+async function testSound() {
+    try {
+        const { audioContext, bassPlayer } = await initAudio();
+        if (bassPlayer) {
+            bassPlayer.play('C2', audioContext.currentTime, { duration: 0.5, gain: 0.5 });
         }
+    } catch (error) {
+        console.error('Error testing sound:', error);
     }
 }
