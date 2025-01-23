@@ -73,7 +73,7 @@ def get_scale_degrees(root_note):
     return scale_notes
 
 def generate_two_five_one(root_note):
-    """Generate a II-V-I progression in the key of the given root note"""
+    """Generate a II-V-I progression in the key of the given root note, with I lasting two bars"""
     scale = get_scale_degrees(root_note)
     
     # II chord (minor 7)
@@ -82,10 +82,10 @@ def generate_two_five_one(root_note):
     # V chord (dominant 7)
     v_chord = f"{scale[4]}{CHORD_TYPES['Dominant 7']}"
     
-    # I chord (major 7)
+    # I chord (major 7) repeated for two bars
     i_chord = f"{scale[0]}{CHORD_TYPES['Major 7']}"
     
-    return [ii_chord, v_chord, i_chord]
+    return [ii_chord, v_chord, i_chord, i_chord]
 
 def generate_diatonic_cycle(root_note):
     """Generate a I-IV-III-VI-II-V-I progression in the key of the given root note"""
@@ -124,7 +124,7 @@ def generate_chord_sequence(num_chords):
     
     if st.session_state.progression_type == "II-V-I":
         # Generate multiple II-V-I progressions
-        chords_per_progression = 3  # II-V-I has 3 chords
+        chords_per_progression = 4  # II-V-I-I has 4 chords
         num_progressions = (num_chords + chords_per_progression - 1) // chords_per_progression
         for _ in range(num_progressions):
             root_note = random.choice(st.session_state.selected_notes)
@@ -351,7 +351,7 @@ with st.sidebar:
     st.subheader('Rhythm Settings')
     st.session_state.time_signature = st.selectbox('Beats per measure', TIME_SIGNATURES, index=2)
     st.session_state.bpm = st.slider('Tempo (BPM)', min_value=40, max_value=200, value=120, step=1)
-    st.session_state.num_chords = st.slider('Number of Chords', min_value=4, max_value=50, value=16, step=1)
+    st.session_state.num_chords = st.slider('Number of Chords or Cycles', min_value=4, max_value=50, value=16, step=1)
     
     st.markdown("---")
     js_code = read_file(os.path.join('static', 'player.js'))
