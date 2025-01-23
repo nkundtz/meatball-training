@@ -8,7 +8,7 @@ if 'is_practicing' not in st.session_state:
     st.session_state.is_practicing = False
 
 # Define the possible notes and chord types
-NOTES = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+NOTES = ['A', 'Bb', 'B', 'C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab']
 CHORD_TYPES = {
     'Major': '',  # C
     'Minor': '-',  # C-
