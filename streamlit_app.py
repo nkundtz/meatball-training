@@ -84,7 +84,6 @@ if st.session_state.is_practicing and selected_notes and selected_chord_types:
     # Create placeholders for display elements
     current_chord_placeholder = st.empty()
     beat_display_placeholder = st.empty()
-    next_chord_placeholder = st.empty()
     
     def generate_chord():
         note = random.choice(selected_notes)
@@ -96,8 +95,9 @@ if st.session_state.is_practicing and selected_notes and selected_chord_types:
     
     # Main practice loop
     try:
+        # Generate initial set of chords
         current_chord = generate_chord()
-        next_chord = generate_chord()
+        next_chords = [generate_chord() for _ in range(3)]  # Generate 3 upcoming chords
         beat_count = 0
         
         while st.session_state.is_practicing:
@@ -108,15 +108,19 @@ if st.session_state.is_practicing and selected_notes and selected_chord_types:
                 unsafe_allow_html=True
             )
             
-            # Display current chord (larger)
+            # Display current chord and upcoming chords in a horizontal layout
             current_chord_placeholder.markdown(
-                f"<h1 style='text-align: center; font-size: 72px;'>{current_chord}</h1>",
-                unsafe_allow_html=True
-            )
-            
-            # Display next chord (smaller)
-            next_chord_placeholder.markdown(
-                f"<p style='text-align: center; font-size: 24px;'>Next: {next_chord}</p>",
+                f"""
+                <div style='display: flex; align-items: center; justify-content: center; gap: 10px;'>
+                    <span style='font-size: 72px;'>{current_chord}</span>
+                    <span style='font-size: 24px; color: #666;'>|</span>
+                    <span style='font-size: 24px;'>{next_chords[0]}</span>
+                    <span style='font-size: 24px; color: #666;'>|</span>
+                    <span style='font-size: 24px;'>{next_chords[1]}</span>
+                    <span style='font-size: 24px; color: #666;'>|</span>
+                    <span style='font-size: 24px;'>{next_chords[2]}</span>
+                </div>
+                """,
                 unsafe_allow_html=True
             )
             
@@ -125,8 +129,8 @@ if st.session_state.is_practicing and selected_notes and selected_chord_types:
             
             # Change chord when we reach the end of a measure
             if beat_count % time_signature == 0:
-                current_chord = next_chord
-                next_chord = generate_chord()
+                current_chord = next_chords[0]
+                next_chords = next_chords[1:] + [generate_chord()]
             
     except Exception as e:
         st.error(f"An error occurred: {e}")
