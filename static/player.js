@@ -3,6 +3,7 @@ let audioContext = null;
 let snarePlayer = null;
 let bassPlayer = null;
 let masterGain = null;
+let isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
 // Listen for mute updates
 window.addEventListener('message', function(event) {
@@ -13,11 +14,19 @@ window.addEventListener('message', function(event) {
 
 // Initialize audio context and players
 async function initAudio() {
+    // For iOS, we need to create the audio context on user interaction
     if (!audioContext) {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioContext = new AudioContext();
         masterGain = audioContext.createGain();
         masterGain.connect(audioContext.destination);
+        
+        // On iOS, we need to resume the audio context
+        if (isIOS && audioContext.state === 'suspended') {
+            await audioContext.resume();
+        }
     }
+    
     if (!snarePlayer) {
         try {
             snarePlayer = await Soundfont.instrument(audioContext, 'synth_drum', {
@@ -41,20 +50,33 @@ async function initAudio() {
 
 // Schedule a note to play
 function scheduleNote(noteName, time, duration, baseGain = 1, instrument = 'snare') {
+    // For iOS, we need to schedule relative to current time
+    const scheduleTime = isIOS ? audioContext.currentTime + time : time;
+    
     const note = {
         noteName,
-        time,
+        time: scheduleTime,
         duration,
         baseGain,
         timeout: setTimeout(() => {
             const player = instrument === 'snare' ? snarePlayer : bassPlayer;
             if (player) {
-                player.play(noteName, time, {
-                    duration: duration,
-                    gain: baseGain
-                });
+                // On iOS, we need to resume the context before playing
+                if (isIOS && audioContext.state === 'suspended') {
+                    audioContext.resume().then(() => {
+                        player.play(noteName, scheduleTime, {
+                            duration: duration,
+                            gain: baseGain
+                        });
+                    });
+                } else {
+                    player.play(noteName, scheduleTime, {
+                        duration: duration,
+                        gain: baseGain
+                    });
+                }
             }
-        }, (time - audioContext.currentTime) * 1000)
+        }, Math.max(0, (scheduleTime - audioContext.currentTime) * 1000))
     };
     return note;
 }
@@ -105,6 +127,15 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
         await new Promise(resolve => setTimeout(resolve, 300));
         loadingOverlay.style.display = 'none';
         
+        // On iOS, we need user interaction to start audio
+        if (isIOS) {
+            countdown.textContent = "Tap to start";
+            countdown.style.cursor = "pointer";
+            await new Promise(resolve => {
+                countdown.addEventListener('click', resolve, { once: true });
+            });
+        }
+        
         // Countdown
         for (let i = 4; i > 0; i--) {
             countdown.textContent = i;
@@ -133,7 +164,7 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
                     currentTime + chord.time,
                     chord.duration,
                     0.8,
-                    'bass'  // Always use bass for chord sequence
+                    'bass'
                 )
             );
         }
@@ -144,17 +175,30 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
             const isDownbeat = (Math.floor(time / secondsPerMeasure) * secondsPerMeasure) === time;
             scheduledNotes.push(
                 scheduleNote(
-                    'C3',  // Use C3 for all metronome clicks
+                    'C3',
                     currentTime + time,
-                    0.1,  // Short duration for snare hits
-                    isDownbeat ? 0.4 : 0.2,  // Louder on downbeat
-                    'snare'  // Always use snare for metronome
+                    0.1,
+                    isDownbeat ? 0.4 : 0.2,
+                    'snare'
                 )
             );
         }
         
-        // Update display
-        function updateDisplay() {
+        // For iOS, we need a more precise timing mechanism
+        let lastUpdateTime = performance.now();
+        const frameInterval = 1000 / 60; // 60fps
+        
+        function updateDisplay(timestamp) {
+            // Throttle updates on iOS
+            if (isIOS) {
+                const elapsed = timestamp - lastUpdateTime;
+                if (elapsed < frameInterval) {
+                    requestAnimationFrame(updateDisplay);
+                    return;
+                }
+                lastUpdateTime = timestamp;
+            }
+            
             const elapsedTime = audioContext.currentTime - startTime;
             const newBeat = Math.floor(elapsedTime / secondsPerBeat) % timeSignature;
             const newMeasure = Math.floor(elapsedTime / secondsPerMeasure);
@@ -186,6 +230,10 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
 async function testSound() {
     try {
         const { audioContext, bassPlayer } = await initAudio();
+        // For iOS, we need to resume the context before playing
+        if (isIOS && audioContext.state === 'suspended') {
+            await audioContext.resume();
+        }
         if (bassPlayer) {
             bassPlayer.play('C2', audioContext.currentTime, { duration: 0.5, gain: 0.5 });
         }
