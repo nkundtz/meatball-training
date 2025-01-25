@@ -14,38 +14,35 @@ window.addEventListener('message', function(event) {
 
 // Initialize audio context and players
 async function initAudio() {
-    // For iOS, we need to create the audio context on user interaction
-    if (!audioContext) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        audioContext = new AudioContext();
-        masterGain = audioContext.createGain();
-        masterGain.connect(audioContext.destination);
-        
+    try {
+        // For iOS, we need to create the audio context on user interaction
+        if (!audioContext) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioContext = new AudioContext();
+            masterGain = audioContext.createGain();
+            masterGain.connect(audioContext.destination);
+        }
+
         // On iOS, we need to resume the audio context
-        if (isIOS && audioContext.state === 'suspended') {
+        if (audioContext.state === 'suspended') {
             await audioContext.resume();
         }
-    }
-    
-    if (!snarePlayer) {
-        try {
+        
+        if (!snarePlayer) {
             snarePlayer = await Soundfont.instrument(audioContext, 'synth_drum', {
                 destination: masterGain
             });
-        } catch (error) {
-            throw new Error('Failed to load snare sound: ' + error.message);
         }
-    }
-    if (!bassPlayer) {
-        try {
+        if (!bassPlayer) {
             bassPlayer = await Soundfont.instrument(audioContext, 'acoustic_bass', {
                 destination: masterGain
             });
-        } catch (error) {
-            throw new Error('Failed to load bass sound: ' + error.message);
         }
+        return { audioContext, snarePlayer, bassPlayer };
+    } catch (error) {
+        console.error('Error initializing audio:', error);
+        throw error;
     }
-    return { audioContext, snarePlayer, bassPlayer };
 }
 
 // Schedule a note to play
@@ -61,20 +58,10 @@ function scheduleNote(noteName, time, duration, baseGain = 1, instrument = 'snar
         timeout: setTimeout(() => {
             const player = instrument === 'snare' ? snarePlayer : bassPlayer;
             if (player) {
-                // On iOS, we need to resume the context before playing
-                if (isIOS && audioContext.state === 'suspended') {
-                    audioContext.resume().then(() => {
-                        player.play(noteName, scheduleTime, {
-                            duration: duration,
-                            gain: baseGain
-                        });
-                    });
-                } else {
-                    player.play(noteName, scheduleTime, {
-                        duration: duration,
-                        gain: baseGain
-                    });
-                }
+                player.play(noteName, scheduleTime, {
+                    duration: duration,
+                    gain: baseGain
+                }).catch(error => console.error('Error playing note:', error));
             }
         }, Math.max(0, (scheduleTime - audioContext.currentTime) * 1000))
     };
@@ -83,7 +70,24 @@ function scheduleNote(noteName, time, duration, baseGain = 1, instrument = 'snar
 
 async function initPlayer(chordSequence, metronomeSequence, displaySequence, timeSignature, bpm, currentVolume) {
     try {
-        // Initialize audio and wait for it to be ready
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingText = document.querySelector('.loading-text');
+        const displayContent = document.getElementById('display-content');
+        const countdown = document.getElementById('countdown');
+        
+        // Show loading overlay with tap instruction on iOS
+        if (isIOS) {
+            loadingText.textContent = 'Tap here to start...';
+            loadingText.style.cursor = 'pointer';
+            
+            // Wait for user interaction
+            await new Promise(resolve => {
+                loadingText.addEventListener('click', resolve, { once: true });
+            });
+        }
+        
+        // Initialize audio after user interaction
+        loadingText.textContent = 'Loading sounds...';
         const { audioContext, snarePlayer, bassPlayer } = await initAudio();
         
         // Set initial volume
@@ -115,36 +119,25 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
         updateBeatDisplay(-1);
         updateChordDisplay(0);
         
-        // Fade transition
-        const loadingOverlay = document.getElementById('loading-overlay');
-        const displayContent = document.getElementById('display-content');
-        const countdown = document.getElementById('countdown');
-        
+        // Hide loading overlay
         loadingOverlay.style.opacity = '0';
         displayContent.style.opacity = '1';
-        
-        // Wait for fade
         await new Promise(resolve => setTimeout(resolve, 300));
         loadingOverlay.style.display = 'none';
-        
-        // On iOS, we need user interaction to start audio
-        if (isIOS) {
-            countdown.textContent = "Tap to start";
-            countdown.style.cursor = "pointer";
-            await new Promise(resolve => {
-                countdown.addEventListener('click', resolve, { once: true });
-            });
-        }
         
         // Countdown
         for (let i = 4; i > 0; i--) {
             countdown.textContent = i;
-            scheduleNote('C3', audioContext.currentTime, 0.1, 0.3, 'snare');
+            try {
+                await snarePlayer.play('C3', audioContext.currentTime, { duration: 0.1, gain: 0.3 });
+            } catch (error) {
+                console.error('Error playing countdown:', error);
+            }
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         countdown.style.display = 'none';
         
-        // Calculate total measures needed
+        // Calculate timing
         const totalMeasures = displaySequence.length;
         const secondsPerBeat = 60.0 / bpm;
         const secondsPerMeasure = secondsPerBeat * timeSignature;
@@ -170,7 +163,6 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
         }
         
         // Schedule metronome sequence
-        // Generate enough metronome clicks for all measures
         for (let time = 0; time < totalDuration; time += secondsPerBeat) {
             const isDownbeat = (Math.floor(time / secondsPerMeasure) * secondsPerMeasure) === time;
             scheduledNotes.push(
@@ -223,19 +215,17 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
         
     } catch (error) {
         console.error('Error initializing player:', error);
-        throw error;
+        const loadingText = document.querySelector('.loading-text');
+        loadingText.textContent = 'Error: ' + error.message;
+        loadingText.style.color = '#ff6b6b';
     }
 }
 
 async function testSound() {
     try {
         const { audioContext, bassPlayer } = await initAudio();
-        // For iOS, we need to resume the context before playing
-        if (isIOS && audioContext.state === 'suspended') {
-            await audioContext.resume();
-        }
         if (bassPlayer) {
-            bassPlayer.play('C2', audioContext.currentTime, { duration: 0.5, gain: 0.5 });
+            await bassPlayer.play('C2', audioContext.currentTime, { duration: 0.5, gain: 0.5 });
         }
     } catch (error) {
         console.error('Error testing sound:', error);
