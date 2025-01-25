@@ -12,32 +12,57 @@ window.addEventListener('message', function(event) {
     }
 });
 
+// Create and unlock iOS audio context
+async function unlockAudioContext(audioContext) {
+    if (audioContext.state === 'suspended') {
+        const buffer = audioContext.createBuffer(1, 1, 22050);
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        source.start(0);
+        await audioContext.resume();
+    }
+}
+
 // Initialize audio context and players
 async function initAudio() {
     try {
         // For iOS, we need to create the audio context on user interaction
         if (!audioContext) {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioContext = new AudioContext();
+            audioContext = new AudioContext({ sampleRate: 44100 });
             masterGain = audioContext.createGain();
             masterGain.connect(audioContext.destination);
         }
 
-        // On iOS, we need to resume the audio context
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
+        // On iOS, we need to unlock the audio context
+        if (isIOS) {
+            await unlockAudioContext(audioContext);
         }
         
+        // Initialize soundfont with specific audio settings for iOS
+        const soundfontOptions = {
+            destination: masterGain,
+            format: isIOS ? 'mp3' : 'ogg',
+            soundfont: 'FluidR3_GM',
+            nameToUrl: (name, soundfont, format) => {
+                return `https://gleitz.github.io/midi-js-soundfonts/${soundfont}/${name}-${format}.js`;
+            }
+        };
+        
         if (!snarePlayer) {
-            snarePlayer = await Soundfont.instrument(audioContext, 'synth_drum', {
-                destination: masterGain
-            });
+            snarePlayer = await Soundfont.instrument(audioContext, 'synth_drum', soundfontOptions);
         }
         if (!bassPlayer) {
-            bassPlayer = await Soundfont.instrument(audioContext, 'acoustic_bass', {
-                destination: masterGain
-            });
+            bassPlayer = await Soundfont.instrument(audioContext, 'acoustic_bass', soundfontOptions);
         }
+        
+        // Test the audio context with a silent note
+        if (isIOS) {
+            await snarePlayer.play('C3', 0, { duration: 0.1, gain: 0 });
+            await bassPlayer.play('C2', 0, { duration: 0.1, gain: 0 });
+        }
+        
         return { audioContext, snarePlayer, bassPlayer };
     } catch (error) {
         console.error('Error initializing audio:', error);
@@ -55,13 +80,23 @@ function scheduleNote(noteName, time, duration, baseGain = 1, instrument = 'snar
         time: scheduleTime,
         duration,
         baseGain,
-        timeout: setTimeout(() => {
+        timeout: setTimeout(async () => {
             const player = instrument === 'snare' ? snarePlayer : bassPlayer;
             if (player) {
-                player.play(noteName, scheduleTime, {
-                    duration: duration,
-                    gain: baseGain
-                }).catch(error => console.error('Error playing note:', error));
+                try {
+                    // For iOS, ensure context is running before playing
+                    if (isIOS && audioContext.state === 'suspended') {
+                        await audioContext.resume();
+                    }
+                    await player.play(noteName, scheduleTime, {
+                        duration: duration,
+                        gain: baseGain,
+                        attack: 0,  // Immediate attack for better timing
+                        release: isIOS ? 0.1 : 0.2  // Shorter release on iOS
+                    });
+                } catch (error) {
+                    console.error('Error playing note:', error);
+                }
             }
         }, Math.max(0, (scheduleTime - audioContext.currentTime) * 1000))
     };
@@ -82,7 +117,21 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
             
             // Wait for user interaction
             await new Promise(resolve => {
-                loadingText.addEventListener('click', resolve, { once: true });
+                const startAudio = async () => {
+                    try {
+                        // Create a silent audio buffer and play it
+                        const buffer = audioContext.createBuffer(1, 1, 22050);
+                        const source = audioContext.createBufferSource();
+                        source.buffer = buffer;
+                        source.connect(audioContext.destination);
+                        source.start(0);
+                        resolve();
+                    } catch (error) {
+                        console.error('Error starting audio:', error);
+                    }
+                };
+                loadingText.addEventListener('touchend', startAudio, { once: true });
+                loadingText.addEventListener('click', startAudio, { once: true });
             });
         }
         
@@ -125,11 +174,19 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
         await new Promise(resolve => setTimeout(resolve, 300));
         loadingOverlay.style.display = 'none';
         
-        // Countdown
+        // Countdown with iOS-compatible sound playing
         for (let i = 4; i > 0; i--) {
             countdown.textContent = i;
+            if (isIOS) {
+                await audioContext.resume();
+            }
             try {
-                await snarePlayer.play('C3', audioContext.currentTime, { duration: 0.1, gain: 0.3 });
+                await snarePlayer.play('C3', audioContext.currentTime, { 
+                    duration: 0.1, 
+                    gain: 0.3,
+                    attack: 0,
+                    release: isIOS ? 0.1 : 0.2
+                });
             } catch (error) {
                 console.error('Error playing countdown:', error);
             }
@@ -142,6 +199,11 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
         const secondsPerBeat = 60.0 / bpm;
         const secondsPerMeasure = secondsPerBeat * timeSignature;
         const totalDuration = totalMeasures * secondsPerMeasure;
+        
+        // For iOS, ensure we're still running
+        if (isIOS) {
+            await audioContext.resume();
+        }
         
         // Schedule all notes
         const startTime = audioContext.currentTime + 0.1;
@@ -189,6 +251,11 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
                     return;
                 }
                 lastUpdateTime = timestamp;
+                
+                // Keep audio context running
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
             }
             
             const elapsedTime = audioContext.currentTime - startTime;
@@ -224,8 +291,16 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
 async function testSound() {
     try {
         const { audioContext, bassPlayer } = await initAudio();
+        if (isIOS) {
+            await audioContext.resume();
+        }
         if (bassPlayer) {
-            await bassPlayer.play('C2', audioContext.currentTime, { duration: 0.5, gain: 0.5 });
+            await bassPlayer.play('C2', audioContext.currentTime, { 
+                duration: 0.5, 
+                gain: 0.5,
+                attack: 0,
+                release: isIOS ? 0.1 : 0.2
+            });
         }
     } catch (error) {
         console.error('Error testing sound:', error);

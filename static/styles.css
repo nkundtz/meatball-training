@@ -82,32 +82,93 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 1.2em;
+    font-size: 2em;  /* Base size for all chords */
     color: var(--text-color);
-    height: 80px;
-    line-height: 80px;
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 0 10px;
 }
 
 .chord {
-    min-width: 60px;
+    min-width: 80px;
     text-align: center;
     transition: all 0.2s ease;
 }
 
 .current-chord {
-    font-size: 1.5em;
+    font-size: 1.2em;  /* 20% larger than other chords */
     font-weight: bold;
     color: var(--text-color);
 }
 
 .next-chord {
-    font-size: 36px;
+    font-size: 0.9em;  /* 10% smaller than base size */
     color: var(--border-color);
     opacity: 0.7;
 }
 
 .separator {
-    font-size: 36px;
+    font-size: 0.8em;  /* Even smaller separators */
     color: var(--border-color);
     opacity: 0.3;
+    padding: 0 5px;
+}
+
+/* Responsive font sizes for small screens */
+@media screen and (max-width: 480px) {
+    #chord-display {
+        font-size: 1.4em;  /* Reduce base size */
+        gap: 8px;
+        padding: 0 5px;
+    }
+    
+    .chord {
+        min-width: 60px;
+    }
+    
+    .current-chord {
+        font-size: 1.1em;
+    }
+    
+    .next-chord {
+        font-size: 0.85em;
+    }
+    
+    #beat-display {
+        font-size: 1.2em;
+    }
+    
+    .separator {
+        padding: 0 2px;
+    }
+}
+
+/* Even smaller screens */
+@media screen and (max-width: 360px) {
+    #chord-display {
+        font-size: 1.2em;  /* Further reduce base size */
+        gap: 6px;
+        padding: 0 2px;
+    }
+    
+    .chord {
+        min-width: 50px;
+    }
+    
+    .current-chord {
+        font-size: 1.1em;
+    }
+    
+    .next-chord {
+        font-size: 0.8em;
+    }
+    
+    #beat-display {
+        font-size: 1em;
+    }
+    
+    .separator {
+        padding: 0 1px;
+    }
 }
