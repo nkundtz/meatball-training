@@ -38,23 +38,24 @@ NOTE_PAIRS = [
 NOTES = [pair[0] for pair in NOTE_PAIRS]  # Flat-based notes
 NOTES_SHARP = [pair[1] for pair in NOTE_PAIRS]  # Sharp-based notes
 SHARP_ROOTS = {'B', 'E', 'A', 'D', 'G'}  # Root notes that should use sharp-based scales
-CHORD_TYPES = {
-    'Major': '',  # C
-    'Minor': '-',  # C-
-    'Major 7': 'maj7',  # CΔ
-    'Minor 7': '-7',  # C-7
-    'Dominant 7': 'Δ7',  # C7
-    'Minor 7 flat 5': '-7b5',  # C-7b5
-    'Diminished': 'o',  # Co
-    'Augmented': '+',  # C+
-    'Sus4': 'sus4',  # Csus4
-    'Sus2': 'sus2'  # Csus2
-}
-TIME_SIGNATURES = [2, 3, 4, 5, 6]
 
-def read_file(path):
-    with open(path, 'r') as f:
-        return f.read()
+def get_chord_qualities():
+    """Return a dictionary mapping chord quality names to their symbols."""
+    return {
+        'Major': '',  # C
+        'Minor': 'm',  # Cm
+        'Major 7': 'maj7',  # Cmaj7
+        'Minor 7': 'm7',  # Cm7
+        'Dominant 7': '7',  # C7
+        'Minor 7 flat 5': 'm7b5',  # Cm7b5
+        'Diminished': 'dim',  # Cdim
+        'Augmented': 'aug',  # Caug
+        'Sus4': 'sus4',  # Csus4
+        'Sus2': 'sus2'  # Csus2
+    }
+
+CHORD_TYPES = get_chord_qualities()
+TIME_SIGNATURES = [2, 3, 4, 5, 6]
 
 def get_scale_degrees(root_note):
     """Get the scale degrees for a major scale starting from the given root note"""
@@ -271,6 +272,10 @@ def get_note_display(note):
     if flat_note != sharp_note:
         return f"{sharp_note}/{flat_note}"
     return note
+
+def read_file(path):
+    with open(path, 'r') as f:
+        return f.read()
 
 st.title('Chord Practice Tool')
 
