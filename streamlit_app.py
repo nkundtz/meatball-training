@@ -124,27 +124,34 @@ def generate_chord_sequence(num_chords):
     seconds_per_measure = seconds_per_beat * beats_per_measure
     
     if st.session_state.progression_type == "II-V-I":
-        # Generate multiple II-V-I progressions
+        # Generate exactly the requested number of II-V-I progressions
         chords_per_progression = 4  # II-V-I-I has 4 chords
-        num_progressions = (num_chords + chords_per_progression - 1) // chords_per_progression
+        num_progressions = num_chords // chords_per_progression
         for _ in range(num_progressions):
             root_note = random.choice(st.session_state.selected_notes)
             progression = generate_two_five_one(root_note)
             display_sequence.extend(progression)
-            if len(display_sequence) >= num_chords:
-                display_sequence = display_sequence[:num_chords]
-                break
+            
+        # Handle any remaining measures if num_chords is not divisible by 4
+        if num_chords % chords_per_progression > 0:
+            root_note = random.choice(st.session_state.selected_notes)
+            progression = generate_two_five_one(root_note)
+            display_sequence.extend(progression[:num_chords % chords_per_progression])
+            
     elif st.session_state.progression_type == "Diatonic Cycle":
-        # Generate multiple diatonic cycle progressions
+        # Generate exactly the requested number of diatonic cycles
         chords_per_progression = 7  # Diatonic cycle has 7 chords
-        num_progressions = (num_chords + chords_per_progression - 1) // chords_per_progression
+        num_progressions = num_chords // chords_per_progression
         for _ in range(num_progressions):
             root_note = random.choice(st.session_state.selected_notes)
             progression = generate_diatonic_cycle(root_note)
             display_sequence.extend(progression)
-            if len(display_sequence) >= num_chords:
-                display_sequence = display_sequence[:num_chords]
-                break
+            
+        # Handle any remaining measures if num_chords is not divisible by 7
+        if num_chords % chords_per_progression > 0:
+            root_note = random.choice(st.session_state.selected_notes)
+            progression = generate_diatonic_cycle(root_note)
+            display_sequence.extend(progression[:num_chords % chords_per_progression])
     else:
         # Generate random chords
         for _ in range(num_chords):
@@ -160,13 +167,13 @@ def generate_chord_sequence(num_chords):
         if len(chord) > 1 and chord[1] in ['b', '#']:
             root_note += chord[1]
             
-        # Use octave 2 for a deep double bass sound (two octaves lower than before)
+        # Use octave 2 for a deep double bass sound
         midi_note = f"{root_note}2"
         sequence.append({
             'note': midi_note,
             'time': i * seconds_per_measure,
             'duration': seconds_per_measure * 0.95,
-            'instrument': 'bass'  # Use bass instrument sound
+            'instrument': 'bass'
         })
     
     return sequence, display_sequence
@@ -355,8 +362,8 @@ with st.sidebar:
     
     st.subheader('Rhythm Settings')
     st.session_state.time_signature = st.selectbox('Beats per measure', TIME_SIGNATURES, index=2)
-    st.session_state.bpm = st.slider('Tempo (BPM)', min_value=40, max_value=200, value=120, step=1)
-    st.session_state.num_chords = st.slider('Number of Chords or Cycles', min_value=4, max_value=50, value=16, step=1)
+    st.session_state.bpm = st.slider('Tempo (beats per minute)', min_value=40, max_value=200, value=120, step=1)
+    st.session_state.num_chords = st.slider('Number of Chords', min_value=4, max_value=50, value=16, step=1)
     
     st.markdown("---")
     js_code = read_file(os.path.join('static', 'player.js'))
