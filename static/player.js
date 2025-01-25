@@ -13,31 +13,33 @@ window.addEventListener('message', function(event) {
 });
 
 // Create and unlock iOS audio context
-async function unlockAudioContext(audioContext) {
-    if (audioContext.state === 'suspended') {
-        const buffer = audioContext.createBuffer(1, 1, 22050);
-        const source = audioContext.createBufferSource();
-        source.buffer = buffer;
-        source.connect(audioContext.destination);
-        source.start(0);
-        await audioContext.resume();
+async function createAudioContext() {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioContext({ sampleRate: 44100 });
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+    
+    // Create and play a silent buffer
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+    
+    if (ctx.state === 'suspended') {
+        await ctx.resume();
     }
+    
+    return { ctx, gain };
 }
 
 // Initialize audio context and players
 async function initAudio() {
     try {
-        // For iOS, we need to create the audio context on user interaction
         if (!audioContext) {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioContext = new AudioContext({ sampleRate: 44100 });
-            masterGain = audioContext.createGain();
-            masterGain.connect(audioContext.destination);
-        }
-
-        // On iOS, we need to unlock the audio context
-        if (isIOS) {
-            await unlockAudioContext(audioContext);
+            const { ctx, gain } = await createAudioContext();
+            audioContext = ctx;
+            masterGain = gain;
         }
         
         // Initialize soundfont with specific audio settings for iOS
@@ -115,23 +117,28 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
             loadingText.textContent = 'Tap here to start...';
             loadingText.style.cursor = 'pointer';
             
-            // Wait for user interaction
+            // Wait for user interaction before creating audio context
             await new Promise(resolve => {
                 const startAudio = async () => {
                     try {
-                        // Create a silent audio buffer and play it
-                        const buffer = audioContext.createBuffer(1, 1, 22050);
-                        const source = audioContext.createBufferSource();
-                        source.buffer = buffer;
-                        source.connect(audioContext.destination);
-                        source.start(0);
+                        loadingText.textContent = 'Starting audio...';
+                        await createAudioContext();
                         resolve();
                     } catch (error) {
                         console.error('Error starting audio:', error);
+                        loadingText.textContent = 'Error starting audio. Please try again.';
+                        loadingText.style.color = '#ff6b6b';
                     }
                 };
-                loadingText.addEventListener('touchend', startAudio, { once: true });
-                loadingText.addEventListener('click', startAudio, { once: true });
+                
+                // Add both touch and click handlers
+                const handleInteraction = (event) => {
+                    event.preventDefault();
+                    startAudio();
+                };
+                
+                loadingText.addEventListener('touchend', handleInteraction, { once: true });
+                loadingText.addEventListener('click', handleInteraction, { once: true });
             });
         }
         
