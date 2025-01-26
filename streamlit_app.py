@@ -56,12 +56,7 @@ with st.sidebar:
     if 'volume' not in st.session_state:
         st.session_state.volume = 1.0
     
-    mute_col, label_col = st.columns([1, 3])
-    with mute_col:
-        is_muted = not st.checkbox("Mute", value=not st.session_state.volume == 0, key="mute_toggle", on_change=None, label_visibility="collapsed")
-    with label_col:
-        st.write("🔊 Enable Sound")
-    
+    is_muted = not st.checkbox("🔊 Enable Sound", value=not st.session_state.volume == 0, key="mute_toggle")
     st.session_state.volume = 0 if is_muted else 1.0
 
     st.subheader('Select Root Notes')
