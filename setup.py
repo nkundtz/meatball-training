@@ -21,4 +21,7 @@ setup(
             "static/css/*.css",
         ],
     },
+    # Add manifest inclusion
+    include_package_data=True,
+    zip_safe=False,
 )

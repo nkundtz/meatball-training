@@ -5,6 +5,7 @@ import json
 import streamlit as st
 import streamlit.components.v1 as components
 from typing import Dict, List, Any
+from pkg_resources import resource_string
 
 def read_file(path: str) -> str:
     """Read a file and return its contents.
@@ -15,11 +16,17 @@ def read_file(path: str) -> str:
     Returns:
         File contents as string
     """
-    import os.path
-    package_dir = os.path.dirname(os.path.dirname(__file__))
-    full_path = os.path.join(package_dir, path)
-    with open(full_path, 'r') as f:
-        return f.read()
+    try:
+        # Try to read file using pkg_resources
+        content = resource_string('meatball', path).decode('utf-8')
+    except Exception:
+        # Fallback to local file reading for development
+        import os.path
+        package_dir = os.path.dirname(os.path.dirname(__file__))
+        full_path = os.path.join(package_dir, path)
+        with open(full_path, 'r') as f:
+            content = f.read()
+    return content
 
 def play_sequence(
     chord_sequence: List[Dict[str, Any]],
@@ -34,8 +41,8 @@ def play_sequence(
         display_sequence: List of chord symbols to display
     """
     # Read external files
-    js_code = read_file(os.path.join('static', 'js', 'player.js'))
-    css_code = read_file(os.path.join('static', 'css', 'styles.css'))
+    js_code = read_file('static/js/player.js')
+    css_code = read_file('static/css/styles.css')
     
     # Get Streamlit theme
     is_dark_theme = st.get_option("theme.base") == "dark"
