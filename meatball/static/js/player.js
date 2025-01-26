@@ -88,6 +88,12 @@ async function scheduleNote(noteName, time, duration, baseGain = 1, instrument =
 // Initialize player with sequence data
 async function initPlayer(chordSequence, metronomeSequence, displaySequence, timeSignature, bpm, currentVolume) {
     try {
+        // Get current BPM from slider
+        const bpmSlider = window.parent.document.querySelector('div[data-testid="stSlider"] input');
+        if (bpmSlider) {
+            bpm = parseInt(bpmSlider.value);
+        }
+        
         const loadingOverlay = document.getElementById('loading-overlay');
         const loadingText = document.querySelector('.loading-text');
         const displayContent = document.getElementById('display-content');
@@ -208,7 +214,9 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
         }
         
         // Schedule metronome sequence
-        for (let time = 0; time < totalDuration; time += secondsPerBeat) {
+        const totalBeats = Math.floor(totalDuration / secondsPerBeat);
+        for (let i = 0; i < totalBeats; i++) {
+            const time = i * secondsPerBeat;
             const isDownbeat = (Math.floor(time / secondsPerMeasure) * secondsPerMeasure) === time;
             scheduledNotes.push(
                 scheduleNote(
@@ -270,12 +278,6 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
                 // Reset display
                 updateBeatDisplay(-1);
                 updateChordDisplay(0);
-                
-                // Update BPM from slider
-                const bpmSlider = window.parent.document.querySelector('div[data-testid="stSlider"] input');
-                if (bpmSlider) {
-                    bpm = parseInt(bpmSlider.value);
-                }
                 
                 // Find and click the stop button to force state update
                 const button = window.parent.document.querySelector('button[data-testid="baseButton-secondary"]');

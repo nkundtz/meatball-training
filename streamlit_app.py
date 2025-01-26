@@ -58,7 +58,7 @@ with st.sidebar:
     
     mute_col, label_col = st.columns([1, 3])
     with mute_col:
-        is_muted = not st.checkbox("", value=not st.session_state.volume == 0, key="mute_toggle", on_change=None)
+        is_muted = not st.checkbox("Mute", value=not st.session_state.volume == 0, key="mute_toggle", on_change=None, label_visibility="collapsed")
     with label_col:
         st.write("🔊 Enable Sound")
     
@@ -68,7 +68,7 @@ with st.sidebar:
     selected_notes = []
     note_pairs = list(zip(NOTES, [get_note_display(note) for note in NOTES]))
     for note, display_note in note_pairs:
-        if st.checkbox(display_note, value=note in st.session_state.selected_notes):
+        if st.checkbox(display_note, value=note in st.session_state.selected_notes, key=f"note_{note}"):
             selected_notes.append(note)
     # Ensure at least one note is selected
     if not selected_notes:
@@ -90,7 +90,7 @@ with st.sidebar:
     }
     selected_chord_types = []
     for chord_type, description in chord_descriptions.items():
-        if st.checkbox(description, value=chord_type in st.session_state.selected_chord_types):  
+        if st.checkbox(description, value=chord_type in st.session_state.selected_chord_types, key=f"chord_{chord_type}"):  
             selected_chord_types.append(chord_type)
     if not selected_chord_types:
         selected_chord_types = ['Major']  
@@ -98,7 +98,7 @@ with st.sidebar:
     
     st.subheader('Rhythm Settings')
     st.session_state.time_signature = st.selectbox('Beats per measure', [2, 3, 4, 5, 6], index=2)
-    st.session_state.bpm = st.slider('Tempo (BPM)', min_value=40, max_value=200, value=120, step=1)
+    st.session_state.bpm = st.slider('Tempo (BPM)', min_value=40, max_value=200, value=st.session_state.bpm, step=1)
     
     # Initialize num_chords if not in session state
     if 'num_chords' not in st.session_state:
