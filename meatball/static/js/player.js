@@ -12,19 +12,12 @@ window.addEventListener('message', function(event) {
     }
 });
 
-// Create and unlock iOS audio context
+// Create audio context
 async function createAudioContext() {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const ctx = new AudioContext({ sampleRate: 44100 });
     const gain = ctx.createGain();
     gain.connect(ctx.destination);
-    
-    // Create and play a silent buffer
-    const buffer = ctx.createBuffer(1, 1, 22050);
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start(0);
     
     if (ctx.state === 'suspended') {
         await ctx.resume();
@@ -42,7 +35,11 @@ async function initAudio() {
             masterGain = gain;
         }
         
-        // Initialize soundfont with specific audio settings for iOS
+        if (snarePlayer && bassPlayer) {
+            return { audioContext, snarePlayer, bassPlayer };
+        }
+        
+        // Initialize soundfont
         const soundfontOptions = {
             destination: masterGain,
             format: isIOS ? 'mp3' : 'ogg',
@@ -52,18 +49,14 @@ async function initAudio() {
             }
         };
         
-        if (!snarePlayer) {
-            snarePlayer = await Soundfont.instrument(audioContext, 'synth_drum', soundfontOptions);
-        }
-        if (!bassPlayer) {
-            bassPlayer = await Soundfont.instrument(audioContext, 'acoustic_bass', soundfontOptions);
-        }
+        // Load both instruments in parallel
+        const [snare, bass] = await Promise.all([
+            Soundfont.instrument(audioContext, 'synth_drum', soundfontOptions),
+            Soundfont.instrument(audioContext, 'acoustic_bass', soundfontOptions)
+        ]);
         
-        // Test the audio context with a silent note
-        if (isIOS) {
-            await snarePlayer.play('C3', 0, { duration: 0.1, gain: 0 });
-            await bassPlayer.play('C2', 0, { duration: 0.1, gain: 0 });
-        }
+        snarePlayer = snare;
+        bassPlayer = bass;
         
         return { audioContext, snarePlayer, bassPlayer };
     } catch (error) {
@@ -72,39 +65,27 @@ async function initAudio() {
     }
 }
 
-// Schedule a note to play
-function scheduleNote(noteName, time, duration, baseGain = 1, instrument = 'snare') {
-    // For iOS, we need to schedule relative to current time
-    const scheduleTime = isIOS ? audioContext.currentTime + time : time;
-    
-    const note = {
-        noteName,
-        time: scheduleTime,
-        duration,
-        baseGain,
-        timeout: setTimeout(async () => {
-            const player = instrument === 'snare' ? snarePlayer : bassPlayer;
-            if (player) {
-                try {
-                    // For iOS, ensure context is running before playing
-                    if (isIOS && audioContext.state === 'suspended') {
-                        await audioContext.resume();
-                    }
-                    await player.play(noteName, scheduleTime, {
-                        duration: duration,
-                        gain: baseGain,
-                        attack: 0,  // Immediate attack for better timing
-                        release: isIOS ? 0.1 : 0.2  // Shorter release on iOS
-                    });
-                } catch (error) {
-                    console.error('Error playing note:', error);
-                }
+// Schedule a note to play at a specific time
+async function scheduleNote(noteName, time, duration, baseGain = 1, instrument = 'snare') {
+    const player = instrument === 'snare' ? snarePlayer : bassPlayer;
+    if (player) {
+        try {
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
             }
-        }, Math.max(0, (scheduleTime - audioContext.currentTime) * 1000))
-    };
-    return note;
+            await player.play(noteName, time, {
+                duration: duration,
+                gain: baseGain,
+                attack: 0,
+                release: 0.1
+            });
+        } catch (error) {
+            console.error('Error playing note:', error);
+        }
+    }
 }
 
+// Initialize player with sequence data
 async function initPlayer(chordSequence, metronomeSequence, displaySequence, timeSignature, bpm, currentVolume) {
     try {
         const loadingOverlay = document.getElementById('loading-overlay');
@@ -188,12 +169,7 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
                 await audioContext.resume();
             }
             try {
-                await snarePlayer.play('C3', audioContext.currentTime, { 
-                    duration: 0.1, 
-                    gain: 0.3,
-                    attack: 0,
-                    release: isIOS ? 0.1 : 0.2
-                });
+                await playNote('C3', 0.1, 0.3, 'snare');
             } catch (error) {
                 console.error('Error playing countdown:', error);
             }
@@ -223,7 +199,7 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
             scheduledNotes.push(
                 scheduleNote(
                     chord.note,
-                    currentTime + chord.time,
+                    startTime + chord.time,
                     chord.duration,
                     0.8,
                     'bass'
@@ -237,7 +213,7 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
             scheduledNotes.push(
                 scheduleNote(
                     'C3',
-                    currentTime + time,
+                    startTime + time,
                     0.1,
                     isDownbeat ? 0.4 : 0.2,
                     'snare'
@@ -319,21 +295,22 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
     }
 }
 
-async function testSound() {
-    try {
-        const { audioContext, bassPlayer } = await initAudio();
-        if (isIOS) {
-            await audioContext.resume();
-        }
-        if (bassPlayer) {
-            await bassPlayer.play('C2', audioContext.currentTime, { 
-                duration: 0.5, 
-                gain: 0.5,
+// Play a note immediately
+async function playNote(noteName, duration, baseGain = 1, instrument = 'snare') {
+    const player = instrument === 'snare' ? snarePlayer : bassPlayer;
+    if (player) {
+        try {
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+            await player.play(noteName, 0, {
+                duration: duration,
+                gain: baseGain,
                 attack: 0,
-                release: isIOS ? 0.1 : 0.2
+                release: 0.1
             });
+        } catch (error) {
+            console.error('Error playing note:', error);
         }
-    } catch (error) {
-        console.error('Error testing sound:', error);
     }
 }
