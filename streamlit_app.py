@@ -114,19 +114,3 @@ with st.sidebar:
     
     # Update session state with new value
     st.session_state.num_chords = num_chords
-    
-    st.markdown("---")
-    js_code = os.path.join('meatball', 'static', 'js', 'player.js')
-    components.html(f"""
-        <script src="https://cdn.jsdelivr.net/npm/soundfont-player@0.12.0/dist/soundfont-player.min.js"></script>
-        <script>{js_code}</script>
-        <button id="test-sound-button" onclick="testSound()" style="
-            font-size: 0.8em;
-            padding: 0.5em 1em;
-            border-radius: 0.3em;
-            border: 1px solid #ccc;
-            background: #fff;
-            cursor: pointer;
-            transition: all 0.2s;
-        ">Test Sound</button>
-    """, height=50)

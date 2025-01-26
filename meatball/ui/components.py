@@ -16,17 +16,7 @@ def read_file(path: str) -> str:
     Returns:
         File contents as string
     """
-    try:
-        # Try to read file using pkg_resources
-        content = resource_string('meatball', path).decode('utf-8')
-    except Exception:
-        # Fallback to local file reading for development
-        import os.path
-        package_dir = os.path.dirname(os.path.dirname(__file__))
-        full_path = os.path.join(package_dir, path)
-        with open(full_path, 'r') as f:
-            content = f.read()
-    return content
+    return resource_string('meatball', path).decode('utf-8')
 
 def play_sequence(
     chord_sequence: List[Dict[str, Any]],
