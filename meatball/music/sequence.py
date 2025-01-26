@@ -75,7 +75,7 @@ def generate_metronome_sequence(
     num_measures: int,
     beats_per_measure: int,
     seconds_per_beat: float
-) -> List[Dict]:
+) -> List[float]:
     """Generate metronome clicks for each beat.
     
     Args:
@@ -84,17 +84,12 @@ def generate_metronome_sequence(
         seconds_per_beat: Duration of each beat in seconds
         
     Returns:
-        List of metronome click events
+        List of metronome click times
     """
     sequence = []
     total_beats = num_measures * beats_per_measure
     
     for i in range(total_beats):
-        sequence.append({
-            'note': 'G5' if i % beats_per_measure == 0 else 'E5',
-            'time': i * seconds_per_beat,
-            'duration': 0.1,
-            'gain': 0.3
-        })
+        sequence.append(i * seconds_per_beat)
     
     return sequence

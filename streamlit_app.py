@@ -2,17 +2,32 @@
 
 import streamlit as st
 import streamlit.components.v1 as components
+import json
+import random
 import os
 
 from meatball.ui.session import init_session_state
-from meatball.ui.components import play_sequence
+from meatball.ui.components import play_sequence, create_sound_controls
 from meatball.music.sequence import generate_chord_sequence, generate_metronome_sequence
 from meatball.music.theory import NOTES, CHORD_TYPES, get_note_display
 
 # Initialize session state
 init_session_state()
 
-st.title('Chord Practice Tool')
+st.set_page_config(
+    page_title="Meatball Training",
+    page_icon="🎵",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# Main content
+st.title('Meatball Training')
+
+# Display chord progression
+if st.session_state.current_progression:
+    st.write('Current progression:')
+    st.write(st.session_state.current_progression)
 
 st.session_state.progression_type = st.selectbox(
     'Progression Type',
@@ -50,45 +65,29 @@ if st.session_state.is_practicing:
     
     play_sequence(midi_sequence, metronome_sequence, display_sequence)
 
+# Sidebar
 with st.sidebar:
     st.header('Settings')
     
-    if 'volume' not in st.session_state:
-        st.session_state.volume = 1.0
-    
-    is_muted = not st.checkbox("🔊 Enable Sound", value=not st.session_state.volume == 0, key="mute_toggle")
-    st.session_state.volume = 0 if is_muted else 1.0
-
     st.subheader('Select Root Notes')
     selected_notes = []
     note_pairs = list(zip(NOTES, [get_note_display(note) for note in NOTES]))
-    for note, display_note in note_pairs:
-        if st.checkbox(display_note, value=note in st.session_state.selected_notes, key=f"note_{note}"):
-            selected_notes.append(note)
-    # Ensure at least one note is selected
-    if not selected_notes:
-        selected_notes = ['C']
-    st.session_state.selected_notes = selected_notes
     
+    for i in range(0, len(note_pairs), 3):
+        cols = st.columns(3)
+        for j in range(3):
+            if i + j < len(note_pairs):
+                note, display = note_pairs[i + j]
+                if cols[j].checkbox(display, value=True, key=f'note_{note}'):
+                    selected_notes.append(note)
+
     st.subheader('Select Chord Types')
-    chord_descriptions = {
-        'Major': 'Major',
-        'Minor': 'Minor',
-        'Major 7': 'Major 7',
-        'Minor 7': 'Minor 7',
-        'Dominant 7': 'Dominant 7',
-        'Minor 7 flat 5': 'Minor 7 flat 5',
-        'Diminished': 'Diminished',
-        'Augmented': 'Augmented',
-        'Sus4': 'Suspended 4th',
-        'Sus2': 'Suspended 2nd'
-    }
     selected_chord_types = []
-    for chord_type, description in chord_descriptions.items():
-        if st.checkbox(description, value=chord_type in st.session_state.selected_chord_types, key=f"chord_{chord_type}"):  
+    for chord_type in CHORD_TYPES:
+        if st.checkbox(chord_type, value=True, key=f'chord_{chord_type}'):
             selected_chord_types.append(chord_type)
-    if not selected_chord_types:
-        selected_chord_types = ['Major']  
+
+    st.session_state.selected_notes = selected_notes
     st.session_state.selected_chord_types = selected_chord_types
     
     st.subheader('Rhythm Settings')
@@ -109,3 +108,13 @@ with st.sidebar:
     
     # Update session state with new value
     st.session_state.num_chords = num_chords
+    
+    # Sound controls at the bottom
+    st.markdown('---')  # Add a separator
+    create_sound_controls()
+    
+    if 'volume' not in st.session_state:
+        st.session_state.volume = 1.0
+    
+    is_muted = not st.checkbox("🔊 Enable Sound", value=not st.session_state.volume == 0, key="mute_toggle")
+    st.session_state.volume = 0 if is_muted else 1.0

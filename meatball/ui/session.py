@@ -21,6 +21,12 @@ def init_session_state() -> None:
     if 'volume' not in st.session_state:
         st.session_state.volume = 1.0
         
+    if 'bass_volume' not in st.session_state:
+        st.session_state.bass_volume = 0.8
+        
+    if 'metronome_volume' not in st.session_state:
+        st.session_state.metronome_volume = 0.4
+        
     if 'progression_type' not in st.session_state:
         st.session_state.progression_type = "Random"
         
@@ -32,3 +38,6 @@ def init_session_state() -> None:
         
     if 'num_chords' not in st.session_state:
         st.session_state.num_chords = 16
+        
+    if 'current_progression' not in st.session_state:
+        st.session_state.current_progression = None

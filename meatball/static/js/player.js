@@ -75,9 +75,7 @@ async function scheduleNote(noteName, time, duration, baseGain = 1, instrument =
             }
             await player.play(noteName, time, {
                 duration: duration,
-                gain: baseGain,
-                attack: 0,
-                release: 0.1
+                gain: baseGain
             });
         } catch (error) {
             console.error('Error playing note:', error);
@@ -86,7 +84,7 @@ async function scheduleNote(noteName, time, duration, baseGain = 1, instrument =
 }
 
 // Initialize player with sequence data
-async function initPlayer(chordSequence, metronomeSequence, displaySequence, timeSignature, bpm, currentVolume) {
+async function initPlayer(chordSequence, metronomeSequence, displaySequence, timeSignature, bpm, masterVolume, bassVolume, metronomeVolume) {
     try {
         // Get current BPM from slider
         const bpmSlider = window.parent.document.querySelector('div[data-testid="stSlider"] input');
@@ -99,7 +97,7 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
         const displayContent = document.getElementById('display-content');
         const countdown = document.getElementById('countdown');
         
-        // Show loading overlay with tap instruction on iOS
+        // For iOS, we need user interaction before playing audio
         if (isIOS) {
             loadingText.textContent = 'Tap here to start...';
             loadingText.style.cursor = 'pointer';
@@ -109,7 +107,7 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
                 const startAudio = async () => {
                     try {
                         loadingText.textContent = 'Starting audio...';
-                        await createAudioContext();
+                        await initAudio();
                         resolve();
                     } catch (error) {
                         console.error('Error starting audio:', error);
@@ -131,11 +129,11 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
         
         // Initialize audio after user interaction
         loadingText.textContent = 'Loading sounds...';
-        const { audioContext, snarePlayer, bassPlayer } = await initAudio();
+        await initAudio();
         
         // Set initial volume
         if (masterGain) {
-            masterGain.gain.setValueAtTime(currentVolume, audioContext.currentTime);
+            masterGain.gain.setValueAtTime(masterVolume, audioContext.currentTime);
         }
         
         // Clear previously scheduled notes
@@ -168,25 +166,10 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
         await new Promise(resolve => setTimeout(resolve, 300));
         loadingOverlay.style.display = 'none';
         
-        // Countdown with iOS-compatible sound playing
-        for (let i = 4; i > 0; i--) {
-            countdown.textContent = i;
-            if (isIOS) {
-                await audioContext.resume();
-            }
-            try {
-                await playNote('C3', 0.1, 0.3, 'snare');
-            } catch (error) {
-                console.error('Error playing countdown:', error);
-            }
-            await new Promise(resolve => setTimeout(resolve, (60.0 / bpm) * 1000));
-        }
-        countdown.style.display = 'none';
-        
         // Calculate timing
-        const totalMeasures = displaySequence.length;
         const secondsPerBeat = 60.0 / bpm;
         const secondsPerMeasure = secondsPerBeat * timeSignature;
+        const totalMeasures = displaySequence.length;
         const totalDuration = totalMeasures * secondsPerMeasure;
         
         // For iOS, ensure we're still running
@@ -194,11 +177,18 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
             await audioContext.resume();
         }
         
-        // Schedule all notes to start immediately after countdown
-        const startTime = audioContext.currentTime;
-        let currentTime = startTime;
-        let currentBeat = -1;
-        let currentMeasure = 0;
+        // Schedule all notes starting one measure in the future
+        const startTime = audioContext.currentTime + secondsPerMeasure;
+        
+        // Do countdown
+        countdown.style.display = 'block';
+        for (let i = timeSignature; i > 0; i--) {
+            const countdownTime = startTime - (i * secondsPerBeat);
+            countdown.textContent = i;
+            scheduleNote('C3', countdownTime, 0.1, metronomeVolume, 'snare');
+            await new Promise(resolve => setTimeout(resolve, secondsPerBeat * 1000));
+        }
+        countdown.style.display = 'none';
         
         // Schedule chord sequence
         for (const chord of chordSequence) {
@@ -207,23 +197,21 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
                     chord.note,
                     startTime + chord.time,
                     chord.duration,
-                    0.8,
+                    bassVolume,
                     'bass'
                 )
             );
         }
         
         // Schedule metronome sequence
-        const totalBeats = Math.floor(totalDuration / secondsPerBeat);
-        for (let i = 0; i < totalBeats; i++) {
-            const time = i * secondsPerBeat;
+        for (const time of metronomeSequence) {
             const isDownbeat = (Math.floor(time / secondsPerMeasure) * secondsPerMeasure) === time;
             scheduledNotes.push(
                 scheduleNote(
                     'C3',
                     startTime + time,
                     0.1,
-                    isDownbeat ? 0.4 : 0.2,
+                    isDownbeat ? metronomeVolume : metronomeVolume * 0.5,
                     'snare'
                 )
             );
@@ -250,18 +238,11 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
             }
             
             const elapsedTime = audioContext.currentTime - startTime;
-            const newBeat = Math.floor(elapsedTime / secondsPerBeat) % timeSignature;
-            const newMeasure = Math.floor(elapsedTime / secondsPerMeasure);
+            const currentBeat = Math.floor(elapsedTime / secondsPerBeat) % timeSignature;
+            const currentMeasure = Math.floor(elapsedTime / secondsPerMeasure);
             
-            if (newBeat !== currentBeat) {
-                currentBeat = newBeat;
-                updateBeatDisplay(currentBeat);
-            }
-            
-            if (newMeasure !== currentMeasure) {
-                currentMeasure = newMeasure;
-                updateChordDisplay(currentMeasure);
-            }
+            updateBeatDisplay(currentBeat);
+            updateChordDisplay(currentMeasure);
             
             // Continue animation until all measures are complete
             if (elapsedTime < totalDuration) {
@@ -278,12 +259,6 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
                 // Reset display
                 updateBeatDisplay(-1);
                 updateChordDisplay(0);
-                
-                // Find and click the stop button to force state update
-                const button = window.parent.document.querySelector('button[data-testid="baseButton-secondary"]');
-                if (button) {
-                    button.click();
-                }
             }
         }
         
@@ -307,9 +282,7 @@ async function playNote(noteName, duration, baseGain = 1, instrument = 'snare') 
             }
             await player.play(noteName, 0, {
                 duration: duration,
-                gain: baseGain,
-                attack: 0,
-                release: 0.1
+                gain: baseGain
             });
         } catch (error) {
             console.error('Error playing note:', error);

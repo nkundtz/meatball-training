@@ -46,7 +46,6 @@ def play_sequence(
     chord_json = json.dumps(chord_sequence)
     metronome_json = json.dumps(metronome_sequence)
     display_json = json.dumps(display_sequence)
-    volume = st.session_state.volume
     
     html_code = f"""
         <style>
@@ -63,6 +62,7 @@ def play_sequence(
                 <div class="loading-text">Loading piano sounds...</div>
             </div>
             <div id="countdown"></div>
+            
             <div id="display-content">
                 <div id="beat-display"></div>
                 <div id="chord-display">
@@ -88,7 +88,9 @@ def play_sequence(
             {display_json},
             {st.session_state.time_signature},
             {st.session_state.bpm},
-            {volume}
+            {st.session_state.volume},
+            {st.session_state.bass_volume},
+            {st.session_state.metronome_volume}
         );
         
         // Listen for mute toggle changes
@@ -105,3 +107,37 @@ def play_sequence(
         </script>
     """
     components.html(html_code, height=200)
+
+def create_sound_controls() -> None:
+    """Create sound control UI elements in the sidebar.
+    
+    Creates:
+        - Bass volume slider: Controls the volume of the bass instrument
+        - Metronome volume slider: Controls the volume of the metronome clicks
+    """
+    st.sidebar.subheader('Sound Controls')
+    
+    # Update session state from sliders without triggering rerun
+    if 'bass_volume' in st.session_state:
+        bass_vol = st.session_state.bass_volume
+    else:
+        bass_vol = 0.8
+        st.session_state.bass_volume = bass_vol
+        
+    if 'metronome_volume' in st.session_state:
+        metro_vol = st.session_state.metronome_volume
+    else:
+        metro_vol = 0.4
+        st.session_state.metronome_volume = metro_vol
+    
+    # Use on_change callback to update values without triggering rerun
+    def update_bass_volume():
+        st.session_state.bass_volume = st.session_state.bass_volume_slider
+        
+    def update_metro_volume():
+        st.session_state.metronome_volume = st.session_state.metro_volume_slider
+    
+    st.sidebar.slider('Bass Volume', 0.0, 1.0, value=bass_vol, key='bass_volume_slider', 
+                     on_change=update_bass_volume, help='Adjust bass volume')
+    st.sidebar.slider('Metronome Volume', 0.0, 1.0, value=metro_vol, key='metro_volume_slider',
+                     on_change=update_metro_volume, help='Adjust metronome volume')
