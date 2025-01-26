@@ -197,7 +197,7 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
             } catch (error) {
                 console.error('Error playing countdown:', error);
             }
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, (60.0 / bpm) * 1000));
         }
         countdown.style.display = 'none';
         
@@ -212,8 +212,8 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
             await audioContext.resume();
         }
         
-        // Schedule all notes
-        const startTime = audioContext.currentTime + 0.1;
+        // Schedule all notes to start immediately after countdown
+        const startTime = audioContext.currentTime;
         let currentTime = startTime;
         let currentBeat = -1;
         let currentMeasure = 0;
@@ -282,6 +282,30 @@ async function initPlayer(chordSequence, metronomeSequence, displaySequence, tim
             // Continue animation until all measures are complete
             if (elapsedTime < totalDuration) {
                 requestAnimationFrame(updateDisplay);
+            } else {
+                // Clear all scheduled notes
+                scheduledNotes.forEach(note => {
+                    if (note.timeout) {
+                        clearTimeout(note.timeout);
+                    }
+                });
+                scheduledNotes.length = 0;
+                
+                // Reset display
+                updateBeatDisplay(-1);
+                updateChordDisplay(0);
+                
+                // Update BPM from slider
+                const bpmSlider = window.parent.document.querySelector('div[data-testid="stSlider"] input');
+                if (bpmSlider) {
+                    bpm = parseInt(bpmSlider.value);
+                }
+                
+                // Find and click the stop button to force state update
+                const button = window.parent.document.querySelector('button[data-testid="baseButton-secondary"]');
+                if (button) {
+                    button.click();
+                }
             }
         }
         

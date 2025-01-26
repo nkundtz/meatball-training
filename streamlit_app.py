@@ -18,6 +18,12 @@ if 'volume' not in st.session_state:
     st.session_state.volume = 1.0
 if 'progression_type' not in st.session_state:
     st.session_state.progression_type = "Random"
+if 'time_signature' not in st.session_state:
+    st.session_state.time_signature = 4
+if 'bpm' not in st.session_state:
+    st.session_state.bpm = 120
+if 'num_chords' not in st.session_state:
+    st.session_state.num_chords = 16
 
 # Constants
 NOTE_PAIRS = [
@@ -38,24 +44,23 @@ NOTE_PAIRS = [
 NOTES = [pair[0] for pair in NOTE_PAIRS]  # Flat-based notes
 NOTES_SHARP = [pair[1] for pair in NOTE_PAIRS]  # Sharp-based notes
 SHARP_ROOTS = {'B', 'E', 'A', 'D', 'G'}  # Root notes that should use sharp-based scales
-
-def get_chord_qualities():
-    """Return a dictionary mapping chord quality names to their symbols."""
-    return {
-        'Major': '',  # C
-        'Minor': 'm',  # Cm
-        'Major 7': 'maj7',  # Cmaj7
-        'Minor 7': 'm7',  # Cm7
-        'Dominant 7': '7',  # C7
-        'Minor 7 flat 5': 'm7b5',  # Cm7b5
-        'Diminished': 'dim',  # Cdim
-        'Augmented': 'aug',  # Caug
-        'Sus4': 'sus4',  # Csus4
-        'Sus2': 'sus2'  # Csus2
-    }
-
-CHORD_TYPES = get_chord_qualities()
+CHORD_TYPES = {
+    'Major': '',  # C
+    'Minor': 'm',  # Cm
+    'Major 7': 'maj7',  # Cmaj7
+    'Minor 7': 'm7',  # Cm7
+    'Dominant 7': '7',  # C7
+    'Minor 7 flat 5': 'm7b5',  # Cm7b5
+    'Diminished': 'dim',  # Cdim
+    'Augmented': 'aug',  # Caug
+    'Sus4': 'sus4',  # Csus4
+    'Sus2': 'sus2'  # Csus2
+}
 TIME_SIGNATURES = [2, 3, 4, 5, 6]
+
+def read_file(path):
+    with open(path, 'r') as f:
+        return f.read()
 
 def get_scale_degrees(root_note):
     """Get the scale degrees for a major scale starting from the given root note"""
@@ -124,34 +129,27 @@ def generate_chord_sequence(num_chords):
     seconds_per_measure = seconds_per_beat * beats_per_measure
     
     if st.session_state.progression_type == "II-V-I":
-        # Generate exactly the requested number of II-V-I progressions
+        # Generate multiple II-V-I progressions
         chords_per_progression = 4  # II-V-I-I has 4 chords
-        num_progressions = num_chords // chords_per_progression
+        num_progressions = (num_chords + chords_per_progression - 1) // chords_per_progression
         for _ in range(num_progressions):
             root_note = random.choice(st.session_state.selected_notes)
             progression = generate_two_five_one(root_note)
             display_sequence.extend(progression)
-            
-        # Handle any remaining measures if num_chords is not divisible by 4
-        if num_chords % chords_per_progression > 0:
-            root_note = random.choice(st.session_state.selected_notes)
-            progression = generate_two_five_one(root_note)
-            display_sequence.extend(progression[:num_chords % chords_per_progression])
-            
+            if len(display_sequence) >= num_chords:
+                display_sequence = display_sequence[:num_chords]
+                break
     elif st.session_state.progression_type == "Diatonic Cycle":
-        # Generate exactly the requested number of diatonic cycles
+        # Generate multiple diatonic cycle progressions
         chords_per_progression = 7  # Diatonic cycle has 7 chords
-        num_progressions = num_chords // chords_per_progression
+        num_progressions = (num_chords + chords_per_progression - 1) // chords_per_progression
         for _ in range(num_progressions):
             root_note = random.choice(st.session_state.selected_notes)
             progression = generate_diatonic_cycle(root_note)
             display_sequence.extend(progression)
-            
-        # Handle any remaining measures if num_chords is not divisible by 7
-        if num_chords % chords_per_progression > 0:
-            root_note = random.choice(st.session_state.selected_notes)
-            progression = generate_diatonic_cycle(root_note)
-            display_sequence.extend(progression[:num_chords % chords_per_progression])
+            if len(display_sequence) >= num_chords:
+                display_sequence = display_sequence[:num_chords]
+                break
     else:
         # Generate random chords
         for _ in range(num_chords):
@@ -167,13 +165,13 @@ def generate_chord_sequence(num_chords):
         if len(chord) > 1 and chord[1] in ['b', '#']:
             root_note += chord[1]
             
-        # Use octave 2 for a deep double bass sound
+        # Use octave 2 for a deep double bass sound (two octaves lower than before)
         midi_note = f"{root_note}2"
         sequence.append({
             'note': midi_note,
             'time': i * seconds_per_measure,
             'duration': seconds_per_measure * 0.95,
-            'instrument': 'bass'
+            'instrument': 'bass'  # Use bass instrument sound
         })
     
     return sequence, display_sequence
@@ -280,10 +278,6 @@ def get_note_display(note):
         return f"{sharp_note}/{flat_note}"
     return note
 
-def read_file(path):
-    with open(path, 'r') as f:
-        return f.read()
-
 st.title('Chord Practice Tool')
 
 st.session_state.progression_type = st.selectbox(
@@ -296,7 +290,7 @@ st.session_state.progression_type = st.selectbox(
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button('▶ Start Practice' if not st.session_state.is_practicing else '⏹ Stop Practice'):
+    if st.button('▶ Start Practice' if not st.session_state.is_practicing else '⏹ Stop Practice', key='practice_button'):
         st.session_state.is_practicing = not st.session_state.is_practicing
         if not st.session_state.is_practicing:
             st.session_state.chord_sequence.clear()
@@ -362,8 +356,22 @@ with st.sidebar:
     
     st.subheader('Rhythm Settings')
     st.session_state.time_signature = st.selectbox('Beats per measure', TIME_SIGNATURES, index=2)
-    st.session_state.bpm = st.slider('Tempo (beats per minute)', min_value=40, max_value=200, value=120, step=1)
-    st.session_state.num_chords = st.slider('Number of Chords', min_value=4, max_value=50, value=16, step=1)
+    st.session_state.bpm = st.slider('Tempo (BPM)', min_value=40, max_value=200, value=120, step=1)
+    
+    # Initialize num_chords if not in session state
+    if 'num_chords' not in st.session_state:
+        st.session_state.num_chords = 16
+        
+    # Use the current session state value as the slider's default
+    num_chords = st.slider('Number of Chords', 
+                          min_value=4, 
+                          max_value=128, 
+                          value=st.session_state.num_chords,
+                          step=1,
+                          key='num_chords_slider')
+    
+    # Update session state with new value
+    st.session_state.num_chords = num_chords
     
     st.markdown("---")
     js_code = read_file(os.path.join('static', 'player.js'))
