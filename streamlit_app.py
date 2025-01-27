@@ -127,7 +127,7 @@ with st.sidebar:
         st.session_state.num_chords = 16
         
     # Use the current session state value as the slider's default
-    st.session_state.num_chords = st.slider('Number of Chords', min_value=4, max_value=32, value=st.session_state.num_chords, step=4)
+    st.session_state.num_chords = st.slider('Number of Chords', min_value=4, max_value=128, value=st.session_state.num_chords, step=4)
 
 # Add sound controls to sidebar
 create_sound_controls()
