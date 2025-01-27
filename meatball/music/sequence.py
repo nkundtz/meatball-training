@@ -37,13 +37,20 @@ def generate_chord_sequence(
                 break
     
     elif progression_type == "Diatonic Cycle":
+        # Only generate one cycle at a time to ensure we start from a selected root
+        if len(selected_notes) == 0:
+            return [], []  # Return empty sequences if no notes are selected
+            
+        root = random.choice(selected_notes)
+        progression = generate_diatonic_cycle(root)
+        
+        # Repeat the progression until we have enough chords
         while len(display_sequence) < num_chords:
-            root = random.choice(selected_notes)
-            progression = generate_diatonic_cycle(root)
             display_sequence.extend(progression)
-            if len(display_sequence) > num_chords:
-                display_sequence = display_sequence[:num_chords]
-                break
+        
+        # Trim to exact number of chords needed
+        if len(display_sequence) > num_chords:
+            display_sequence = display_sequence[:num_chords]
     
     else:
         # Generate random chords

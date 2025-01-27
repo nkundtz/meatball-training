@@ -41,3 +41,13 @@ def init_session_state() -> None:
         
     if 'current_progression' not in st.session_state:
         st.session_state.current_progression = None
+        
+    # Initialize sequence storage
+    if 'midi_sequence' not in st.session_state:
+        st.session_state.midi_sequence = []
+        
+    if 'display_sequence' not in st.session_state:
+        st.session_state.display_sequence = []
+        
+    if 'metronome_sequence' not in st.session_state:
+        st.session_state.metronome_sequence = []
