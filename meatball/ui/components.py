@@ -121,7 +121,7 @@ def create_sound_controls() -> None:
     if 'bass_volume' in st.session_state:
         bass_vol = st.session_state.bass_volume
     else:
-        bass_vol = 0.8
+        bass_vol = 1.0
         st.session_state.bass_volume = bass_vol
         
     if 'metronome_volume' in st.session_state:
@@ -137,7 +137,7 @@ def create_sound_controls() -> None:
     def update_metro_volume():
         st.session_state.metronome_volume = st.session_state.metro_volume_slider
     
-    st.sidebar.slider('Bass Volume', 0.0, 1.0, value=bass_vol, key='bass_volume_slider', 
+    st.sidebar.slider('Bass Volume', 0.0, 5.0, value=bass_vol, key='bass_volume_slider', 
                      on_change=update_bass_volume, help='Adjust bass volume')
     st.sidebar.slider('Metronome Volume', 0.0, 1.0, value=metro_vol, key='metro_volume_slider',
                      on_change=update_metro_volume, help='Adjust metronome volume')

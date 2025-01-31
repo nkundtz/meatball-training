@@ -67,8 +67,8 @@ def generate_chord_sequence(
         if len(chord) > 1 and chord[1] in ['b', '#']:
             root_note += chord[1]
             
-        # Use octave 2 for a deep double bass sound
-        midi_note = f"{root_note}2"
+        # Use octave 1 for a deep double bass sound
+        midi_note = f"{root_note}1"
         sequence.append({
             'note': midi_note,
             'time': i * seconds_per_measure,
